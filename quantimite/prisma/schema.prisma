@@ -1,0 +1,236 @@
+// QUANTIMITE — schema.prisma
+// Hierarchy: EducationType -> (Department?) -> Subject -> Chapter -> ContentItem
+// School (Class 0-12): no department; class level lives on Subject.
+// University: department linked; year level lives on Subject.
+// Abroad: handled by separate EducationType "abroad" with Guide items.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Users & RBAC ----------
+
+enum Role {
+  student
+  teacher
+  admin
+  superadmin
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          Role      @default(student)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  bookmarks     Bookmark[]
+  progress      Progress[]
+  refreshTokens RefreshToken[]
+
+  @@index([role])
+  @@index([deletedAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------- Content hierarchy ----------
+
+enum EducationTypeSlug {
+  school
+  university
+  abroad
+}
+
+model EducationType {
+  id        String              @id @default(cuid())
+  slug      EducationTypeSlug   @unique
+  name      String
+  description String?
+  createdAt DateTime            @default(now())
+
+  departments Department[]
+  subjects    Subject[]
+  guides      Guide[]
+}
+
+model Department {
+  id              String        @id @default(cuid())
+  educationTypeId String
+  educationType   EducationType @relation(fields: [educationTypeId], references: [id], onDelete: Cascade)
+  name            String
+  code            String?
+  createdAt       DateTime      @default(now())
+  deletedAt       DateTime?
+
+  subjects        Subject[]
+
+  @@unique([educationTypeId, name])
+  @@index([deletedAt])
+}
+
+model Subject {
+  id              String        @id @default(cuid())
+  educationTypeId String
+  educationType   EducationType @relation(fields: [educationTypeId], references: [id], onDelete: Restrict)
+  departmentId    String?
+  department      Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // For school: classLevel 0-12. For university: year 1-5. For abroad: null.
+  classLevel      Int?
+  name            String
+  slug            String
+  description     String?
+  isPublished     Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  chapters        Chapter[]
+
+  @@unique([educationTypeId, departmentId, classLevel, slug])
+  @@index([isPublished])
+  @@index([deletedAt])
+  @@index([classLevel])
+}
+
+model Chapter {
+  id          String        @id @default(cuid())
+  subjectId   String
+  subject     Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  title       String
+  slug        String
+  order       Int           @default(0)
+  isPublished Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  items       ContentItem[]
+
+  @@unique([subjectId, slug])
+  @@index([subjectId, order])
+  @@index([deletedAt])
+}
+
+enum ContentType {
+  video
+  pdf
+  article
+  quiz
+  guideline
+}
+
+model ContentItem {
+  id          String      @id @default(cuid())
+  chapterId   String
+  chapter     Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  type        ContentType
+  title       String
+  slug        String
+
+  // type-specific payload
+  youtubeId   String?     // for video
+  fileKey     String?     // object storage key
+  fileUrl     String?     // signed/public URL (optional cache)
+  mimeType    String?
+  fileBytes   Int?
+  bodyHtml    String?     // sanitized rich text (article/guideline)
+  meta        Json?       // type-specific extras (duration, pages, etc.)
+
+  order       Int         @default(0)
+  isPublished Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  bookmarks   Bookmark[]
+  progress    Progress[]
+
+  @@unique([chapterId, slug])
+  @@index([chapterId, order])
+  @@index([type])
+  @@index([isPublished])
+  @@index([deletedAt])
+}
+
+// ---------- Abroad guides ----------
+
+enum GuideCategory {
+  admission
+  scholarship
+  visa
+  lifestyle
+  general
+}
+
+model Guide {
+  id              String        @id @default(cuid())
+  educationTypeId String
+  educationType   EducationType @relation(fields: [educationTypeId], references: [id], onDelete: Cascade)
+  country         String
+  university      String?
+  category        GuideCategory
+  title           String
+  slug            String
+  bodyHtml        String?
+  fileKey         String?
+  youtubeId       String?
+  isPublished     Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([educationTypeId, slug])
+  @@index([country])
+  @@index([category])
+  @@index([deletedAt])
+}
+
+// ---------- Engagement ----------
+
+model Bookmark {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentItemId String
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, contentItemId])
+  @@index([userId])
+}
+
+model Progress {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentItemId String
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  percent       Int         @default(0)
+  completed     Boolean     @default(false)
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([userId, contentItemId])
+  @@index([userId])
+}
