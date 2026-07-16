@@ -20,6 +20,7 @@ GraphQL API instead, and uses the real parameter count from the problem's
 2. Open `chrome://extensions`
 3. Toggle **Developer mode** on (top-right)
 4. Click **Load unpacked** and select the `leetcode-cph-companion` folder
+5. There is also the total zip file available for your convenience
 
 ## Requirements
 
