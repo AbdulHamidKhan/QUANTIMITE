@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "LeetCode CPH Companion",
+  "version": "1.0.0",
+  "description": "Sends clean, correctly-parsed LeetCode test cases straight to Competitive Programming Helper (CPH) in VS Code — no DOM scraping, uses LeetCode's own GraphQL API.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "https://leetcode.com/*",
+    "http://127.0.0.1:27121/*"
+  ],
+  "action": {
+    "default_title": "Send test cases to VS Code",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.com/problems/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
